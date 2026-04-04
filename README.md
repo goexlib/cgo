@@ -6,6 +6,8 @@
 
 **cgo** is a zero-c-dependency, pure-Go Foreign Function Interface (FFI) library that enables calling C shared libraries directly from Go code without requiring the CGO toolchain. Built on top of https://github.com/ebitengine/purego, it provides a unified API for Windows, Linux, and macOS with enhanced features for modern Go development.
 
+And in addition, it adds support for **struct parameters and return values** on the Windows platform.
+
 ## Features
 - 🚫 **No CGO** - Eliminates cross-compilation complexities and C toolchain dependencies
 - 🎯 **Unified API** - Consistent interface across all supported platforms
