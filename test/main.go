@@ -32,6 +32,18 @@ func main() {
 
 	fmt.Println("add(1, 2) = ", cgo.CallRet[int](fnAdd, 1, 2))
 
+	fnGetFloat, err := lib.GetSymbol("getFloat")
+	panicIf(err)
+
+	f32 := cgo.CallRet[cgo.Float](fnGetFloat)
+	fmt.Println("getFloat() = ", f32)
+
+	fnGetDouble, err := lib.GetSymbol("getDouble")
+	panicIf(err)
+
+	f64 := cgo.CallRet[cgo.Double](fnGetDouble)
+	fmt.Println("getDouble() = ", f64)
+
 	fnPrint, err := lib.GetSymbol("print")
 	panicIf(err)
 
