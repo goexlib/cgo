@@ -30,6 +30,11 @@ func (l *LazyLibrary) Load() error {
 	return nil
 }
 
+func (l *LazyLibrary) Handle() uintptr {
+	l.Load()
+	return l.handle
+}
+
 func (l *LazyLibrary) NewSymbol(name string) *LazySymbol {
 	return &LazySymbol{lib: l, name: name}
 }
