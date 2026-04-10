@@ -1,6 +1,7 @@
 package cgo
 
 import (
+	"runtime"
 	"sync"
 	"sync/atomic"
 )
@@ -74,5 +75,13 @@ func (s *LazySymbol) CallRaw(args ...uintptr) (r1, r2 uintptr, err error) {
 	if err = s.Find(); err != nil {
 		return 0, 0, err
 	}
-	return CallRaw(s.sym, args...)
+
+	r1, r2, ec := CallRaw(s.sym, args...)
+	if ec != 0 && isWindows {
+		return r1, r2, ec
+	}
+
+	return r1, r2, nil
 }
+
+const isWindows = runtime.GOOS == "windows"
