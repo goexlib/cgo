@@ -1,7 +1,9 @@
 package cgo
 
 import (
+	"fmt"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 )
@@ -9,11 +11,15 @@ import (
 type LazyLibrary struct {
 	mtx    sync.Mutex
 	handle uintptr
-	name   string
+	names  []string
 }
 
-func NewLazyLibrary(name string) *LazyLibrary {
-	return &LazyLibrary{name: name}
+func NewLazyLibrary(name string, fallbacks ...string) (l *LazyLibrary) {
+	l = new(LazyLibrary)
+	l.names = make([]string, 1+len(fallbacks))
+	l.names[0] = name
+	copy(l.names[1:], fallbacks)
+	return
 }
 
 func (l *LazyLibrary) Load() error {
@@ -21,9 +27,21 @@ func (l *LazyLibrary) Load() error {
 		l.mtx.Lock()
 		defer l.mtx.Unlock()
 		if l.handle == 0 {
-			lib, err := Dlopen(l.name, RTLD_NOW)
+			var (
+				lib uintptr
+				err error
+				buf strings.Builder
+			)
+			for _, name := range l.names {
+				lib, err = Dlopen(name, RTLD_NOW)
+				if err != nil {
+					fmt.Fprintf(&buf, " (%s: %v)", name, err)
+					continue
+				}
+				break
+			}
 			if err != nil {
-				return err
+				return fmt.Errorf("load lazy library err:%s", buf.String())
 			}
 			atomic.StoreUintptr(&l.handle, lib)
 		}
@@ -77,8 +95,10 @@ func (s *LazySymbol) CallRaw(args ...uintptr) (r1, r2 uintptr, err error) {
 	}
 
 	r1, r2, ec := CallRaw(s.sym, args...)
-	if ec != 0 && isWindows {
-		return r1, r2, ec
+	if isWindows {
+		if ec != 0 {
+			return r1, r2, ec
+		}
 	}
 
 	return r1, r2, nil
