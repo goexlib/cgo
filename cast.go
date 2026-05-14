@@ -80,3 +80,7 @@ func CBool(b bool) int8 {
 	}
 	return 0
 }
+
+func GoPointer[T any](p uintptr) *T {
+	return (*T)(Pointer(p))
+}
