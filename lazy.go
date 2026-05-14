@@ -30,18 +30,19 @@ func (l *LazyLibrary) Load() error {
 			var (
 				lib uintptr
 				err error
-				buf strings.Builder
+				msg strings.Builder
 			)
 			for _, name := range l.names {
 				lib, err = Dlopen(name, RTLD_NOW)
 				if err != nil {
-					fmt.Fprintf(&buf, " (%s: %v)", name, err)
+					fmt.Fprintf(&msg, " (%s: %v)", name, err)
 					continue
 				}
+				msg.Reset()
 				break
 			}
-			if err != nil {
-				return fmt.Errorf("load lazy library err:%s", buf.String())
+			if msg.Len() != 0 {
+				return fmt.Errorf("load lazy library err:%s", msg.String())
 			}
 			atomic.StoreUintptr(&l.handle, lib)
 		}
