@@ -31,9 +31,9 @@ func (l *LazyLibrary) Load() error {
 	return nil
 }
 
-func (l *LazyLibrary) Handle() (handle uintptr, err error) {
-	err = l.Load()
-	return l.handle, err
+func (l *LazyLibrary) Handle() uintptr {
+	l.Load()
+	return l.handle
 }
 
 func (l *LazyLibrary) NewSymbol(name string) *LazySymbol {
@@ -66,9 +66,9 @@ func (s *LazySymbol) Find() error {
 	return nil
 }
 
-func (s *LazySymbol) Addr() (addr uintptr, err error) {
-	err = s.Find()
-	return s.sym, err
+func (s *LazySymbol) Addr() uintptr {
+	s.Find()
+	return s.sym
 }
 
 func (s *LazySymbol) CallRaw(args ...uintptr) (r1, r2 uintptr, err error) {
