@@ -50,7 +50,9 @@ func (l *LazyLibrary) Load() error {
 }
 
 func (l *LazyLibrary) Handle() uintptr {
-	l.Load()
+	if err := l.Load(); err != nil {
+		panic(err)
+	}
 	return l.handle
 }
 
@@ -85,7 +87,9 @@ func (s *LazySymbol) Find() error {
 }
 
 func (s *LazySymbol) Addr() uintptr {
-	s.Find()
+	if err := s.Find(); err != nil {
+		panic(err)
+	}
 	return s.sym
 }
 
