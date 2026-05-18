@@ -54,7 +54,7 @@ func call(fn uintptr, ret any, args ...any) {
 			v := (*iface)(unsafe.Pointer(&arg))
 			if size := argType.Size(); size <= PointerSize {
 				rawArgs = append(rawArgs, 0)
-				Memcpy(unsafe.Pointer(&rawArgs[len(rawArgs)-1]), unsafe.Pointer(v.val), argType.Size())
+				Memcpy(unsafe.Pointer(&rawArgs[len(rawArgs)-1]), unsafe.Pointer(v.val), Sizet(argType.Size()))
 			} else {
 				// pass address
 				rawArgs = append(rawArgs, v.val)
@@ -81,7 +81,7 @@ func call(fn uintptr, ret any, args ...any) {
 		default:
 			if size := retType.Size(); size <= PointerSize {
 				rv := (*iface)(unsafe.Pointer(&ret)).val
-				Memcpy(unsafe.Pointer(rv), unsafe.Pointer(&r1), size)
+				Memcpy(unsafe.Pointer(rv), unsafe.Pointer(&r1), Sizet(size))
 			}
 		}
 	}
