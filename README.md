@@ -122,14 +122,14 @@ func main() {
 }
 ```
 
-### 4. Callbacks with Float/Struct Return Values
+### 4. Callbacks with Float/Struct Arguments and Return Values
 
-`cgo.NewCallback` converts a Go function into a C function pointer. Unlike
-`purego.NewCallback` (and `syscall.NewCallback` on Windows), it also supports
-**float32/float64 and struct return values**, backed by this package's own
-assembly thunks on linux/amd64, linux/arm64, darwin/amd64, darwin/arm64 and
-windows/amd64. Signatures that the underlying backend already supports are
-forwarded to it unchanged.
+`cgo.NewCallback` converts a Go function into a C function pointer. It
+implements the full platform C calling convention — including **float32/float64
+and struct arguments and return values** — via this package's own assembly
+thunks on linux/amd64, linux/arm64, darwin/amd64, darwin/arm64 and
+windows/amd64. (`purego.NewCallback` and `syscall.NewCallback` support neither
+float/struct returns nor struct arguments.)
 
 ```go
 package main
@@ -141,30 +141,30 @@ type Point struct {
 }
 
 func main() {
-    // A callback returning a struct (not possible with purego.NewCallback):
-    cb := cgo.NewCallback(func(x, y cgo.Float) Point {
-        return Point{X: x * 2, Y: y * 2}
+    // A callback taking and returning a struct:
+    cb := cgo.NewCallback(func(p Point) Point {
+        return Point{X: p.X * 2, Y: p.Y * 2}
     })
 
-    // Pass cb to a C function expecting: Point (*)(float, float)
+    // Pass cb to a C function expecting: Point (*)(Point)
     _ = cb
 }
 ```
 
 Supported callback signatures:
 
-| | integer/pointer/bool args | float args | float return | struct return | struct args |
+| | int/pointer/bool args | float args | struct args | float return | struct return |
 |---|---|---|---|---|---|
-| linux/amd64, linux/arm64 | ✅ | ✅ | ✅ | ✅ | ❌ |
-| darwin/amd64, darwin/arm64 | ✅ | ✅ | ✅ | ✅ | ❌ |
-| windows/amd64 | ✅ | ✅ | ✅ | ✅ | ❌ |
+| linux/amd64, linux/arm64 | ✅ | ✅ | ✅ | ✅ | ✅ |
+| darwin/amd64, darwin/arm64 | ✅ | ✅ | ✅ | ✅ | ✅ |
+| windows/amd64 | ✅ | ✅ | ✅ | ✅ | ✅ |
 | other purego platforms | ✅ | ✅ | ❌ | ❌ | ❌ |
 
-Struct return types must have the same memory layout as the C struct
-(including padding). Homogeneous float aggregates, small structs in
-registers and large structs through the hidden result pointer all follow
-the platform C ABI (System V AMD64, AAPCS64 incl. Apple's stack packing,
-and the Microsoft x64 convention).
+Struct types must have the same memory layout as the C struct (including
+padding). Register/stack placement, homogeneous float aggregates, small
+structs in registers, by-reference and by-value large structs, and the
+hidden struct-return pointer all follow the platform C ABI (System V AMD64,
+AAPCS64 incl. Apple's stack packing, and the Microsoft x64 convention).
 
 ## Platform-Specific Notes
 

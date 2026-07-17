@@ -35,12 +35,11 @@ func Dlclose(handle uintptr) error {
 // NewCallback converts a Go function to a C function pointer that can be
 // passed to C code as a callback.
 //
-// On linux/amd64, linux/arm64, darwin/amd64 and darwin/arm64 it additionally
-// supports float32/float64 and struct return values (which purego.NewCallback
-// does not): such callbacks are backed by this package's own assembly thunk,
-// everything else is forwarded to purego.NewCallback. Struct arguments are
-// not supported. Struct return types must have the same memory layout as
-// their C counterpart (add explicit padding fields if needed).
+// On linux/amd64, linux/arm64, darwin/amd64 and darwin/arm64 the full C
+// calling convention is supported, including float32/float64 and struct
+// arguments and return values, following the System V AMD64 and AAPCS64
+// ABIs. Struct types must have the same memory layout as their C counterpart
+// (add explicit padding fields if needed).
 //
 // Only a limited number of callbacks may be created in a single Go process,
 // and any memory allocated for these callbacks is never released.

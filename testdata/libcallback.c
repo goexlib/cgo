@@ -190,6 +190,59 @@ export int test_cb_void(void (*cb)(int), int (*get)(void)) {
     return get() == 42 ? 0 : 1;
 }
 
+// ---- struct arguments ----
+
+// Small all-float struct: passed in float registers (SSE on amd64, an HFA on
+// arm64).
+export int test_cb_arg_pointf(int (*cb)(PointF, PointF)) {
+    PointF a = {1.5f, 2.5f}, b = {3.5f, 4.5f};
+    return cb(a, b);
+}
+
+// Mixed int/float 16-byte struct.
+export int test_cb_arg_mixed(int (*cb)(Mixed)) {
+    Mixed m = {10, 1.5f, 2.5};
+    return cb(m);
+}
+
+// 16-byte all-integer struct: two integer registers.
+export int test_cb_arg_int_pair(int (*cb)(IntPair)) {
+    IntPair p = {100, 200};
+    return cb(p);
+}
+
+// 3-float HFA argument.
+export int test_cb_arg_vec3(int (*cb)(Vec3)) {
+    Vec3 v = {1.5f, 2.5f, 3.5f};
+    return cb(v);
+}
+
+// 4-double HFA argument (32 bytes: 4 float registers on arm64).
+export int test_cb_arg_quad(int (*cb)(Quad)) {
+    Quad q = {1.5, 2.5, 3.5, 4.5};
+    return cb(q);
+}
+
+// Large (24-byte) struct: by value on the stack (amd64) / by reference (arm64).
+export int test_cb_arg_big(int (*cb)(Big)) {
+    Big b = {10, 20, 30};
+    return cb(b);
+}
+
+// Struct argument mixed with scalar arguments before and after it.
+export int test_cb_arg_surrounded(int (*cb)(int, Mixed, double)) {
+    Mixed m = {10, 1.5f, 2.5};
+    return cb(7, m, 9.0);
+}
+
+// Struct argument that spills to the stack because the integer registers are
+// already used up by preceding scalar arguments.
+export int test_cb_arg_spill(int (*cb)(long long, long long, long long, long long,
+                                       long long, long long, IntPair)) {
+    IntPair p = {100, 200};
+    return cb(1, 2, 3, 4, 5, 6, p);
+}
+
 // Invoke the callback from a foreign (non-Go) thread.
 
 typedef struct ThreadData {

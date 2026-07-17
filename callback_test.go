@@ -155,8 +155,8 @@ func TestNewCallbackPanics(t *testing.T) {
 	expectPanic("not a function", func() { NewCallback(42) })
 	expectPanic("variadic", func() { NewCallback(func(...Int) {}) })
 	expectPanic("multiple returns", func() { NewCallback(func() (Int, Int) { return 0, 0 }) })
-	expectPanic("struct argument", func() { NewCallback(func(struct{ X Int }) {}) })
 	expectPanic("string argument", func() { NewCallback(func(string) {}) })
 	expectPanic("string return", func() { NewCallback(func() string { return "" }) })
-	expectPanic("slice field", func() { NewCallback(func() struct{ S []Int } { return struct{ S []Int }{} }) })
+	expectPanic("slice field arg", func() { NewCallback(func(struct{ S []Int }) {}) })
+	expectPanic("slice field return", func() { NewCallback(func() struct{ S []Int } { return struct{ S []Int }{} }) })
 }

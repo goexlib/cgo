@@ -202,3 +202,36 @@ func TestCallbackReentrant(t *testing.T) {
 		t.Fatalf("got %v, want 6.5", got)
 	}
 }
+
+// The struct-argument round-trips below rely on purego's caller placing the
+// struct where the callback reads it, so they only cover the cases where
+// purego agrees with the C ABI (all-integer, HFA, and by-reference structs).
+// Mixed int/float structs and other cases are covered against a real C
+// compiler in callback_clib_test.go.
+
+func TestCallbackArgStructIntPair(t *testing.T) {
+	cb := NewCallback(func(p testIntPair) LongLong {
+		return p.A*10 + p.B
+	})
+	if got := CallRet[LongLong](cb, testIntPair{A: 3, B: 4}); got != 34 {
+		t.Fatalf("got %v, want 34", got)
+	}
+}
+
+func TestCallbackArgStructHFA(t *testing.T) {
+	cb := NewCallback(func(v testVec3) Float {
+		return v.X + v.Y + v.Z
+	})
+	if got := CallRet[Float](cb, testVec3{X: 1.5, Y: 2.5, Z: 3.5}); got != 7.5 {
+		t.Fatalf("got %v, want 7.5", got)
+	}
+}
+
+func TestCallbackArgStructBig(t *testing.T) {
+	cb := NewCallback(func(b testBig) LongLong {
+		return b.A + b.B + b.C
+	})
+	if got := CallRet[LongLong](cb, testBig{A: 10, B: 20, C: 30}); got != 60 {
+		t.Fatalf("got %v, want 60", got)
+	}
+}
