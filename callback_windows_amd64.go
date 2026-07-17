@@ -10,23 +10,41 @@ import (
 // (a CALL rel32 instruction).
 const cbEntrySize = 5
 
+// ptrSize is the size of a pointer on windows/amd64.
+const ptrSize = 8
+
 // cbBackendSupported reports whether syscall.NewCallback can handle the
-// signature. The Go runtime supports neither float arguments nor float or
-// struct return values on windows/amd64.
+// signature.
+//
+// The Go runtime's syscall.NewCallback is far stricter than
+// purego.NewCallback: it requires exactly one result whose size is exactly
+// the pointer size (8 bytes) and which is not a float, and it rejects float
+// arguments as well as any argument wider than a pointer. See
+// runtime.compileCallback and abiDesc.assignArg. In particular it rejects
+// int32/int16/bool results and functions with no result at all, which are
+// perfectly ordinary C callbacks.
+//
+// Rather than mirror those internal rules (and risk drifting out of sync
+// with them), we only forward the cases that are unambiguously accepted and
+// let this package's own thunk handle everything else. The native thunk is
+// correct for the forwarded cases too, so a false negative here only costs a
+// callback table slot, never correctness.
 func cbBackendSupported(ty reflect.Type) bool {
 	for i := 0; i < ty.NumIn(); i++ {
-		switch ty.In(i).Kind() {
+		in := ty.In(i)
+		switch in.Kind() {
 		case reflect.Float32, reflect.Float64:
 			return false
 		}
+		if in.Size() > ptrSize {
+			return false
+		}
 	}
-	if ty.NumOut() == 0 {
-		return true
+	if ty.NumOut() != 1 || ty.Out(0).Size() != ptrSize {
+		return false
 	}
 	switch ty.Out(0).Kind() {
-	case reflect.Bool,
-		reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
+	case reflect.Int, reflect.Int64, reflect.Uint, reflect.Uint64,
 		reflect.Uintptr, reflect.Ptr, reflect.UnsafePointer:
 		return true
 	}
