@@ -74,6 +74,21 @@ func TestCallbackFromC(t *testing.T) {
 		return Double(is) + fs
 	}))
 
+	// 12 int / 11 float32 arguments spill onto the stack. These are the
+	// authoritative (real C compiler) checks for stack-argument callbacks,
+	// especially Apple's packed ARM64 stack layout, which purego's own
+	// caller does not reproduce (see requirePuregoStackLayout).
+	runCbTest(t, lib, "test_cb_stack_i12", NewCallback(func(
+		a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12 Int) Int {
+		return a1*1 + a2*2 + a3*3 + a4*4 + a5*5 + a6*6 +
+			a7*7 + a8*8 + a9*9 + a10*10 + a11*11 + a12*12
+	}))
+
+	runCbTest(t, lib, "test_cb_stack_f11", NewCallback(func(
+		f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11 Float) Float {
+		return f1 + f2 + f3 + f4 + f5 + f6 + f7 + f8 + f9 + f10 + f11
+	}))
+
 	runCbTest(t, lib, "test_cb_pointf", NewCallback(func(x, y Float) testPointF {
 		return testPointF{X: x * 2, Y: y * 2}
 	}))

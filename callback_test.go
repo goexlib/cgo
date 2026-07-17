@@ -2,7 +2,32 @@
 
 package cgo
 
-import "testing"
+import (
+	"runtime"
+	"testing"
+)
+
+// requirePuregoStackLayout skips a test on platforms where purego's own
+// caller (used by CallRaw and CallRet in these tests) does not lay out
+// stack arguments the way a real C compiler — and therefore this package's
+// callbacks — do.
+//
+// On darwin/arm64 the Apple C ABI packs stack arguments to their natural
+// alignment (e.g. two int32 stack arguments occupy 4 bytes each, not 8).
+// The callbacks implement that packing, verified against a real C compiler
+// in TestCallbackFromC. purego's caller (SyscallN, and the RegisterFunc
+// bundling used by CallRet) instead presents 8-byte stack slots here, so a
+// callback that correctly reads packed stack arguments disagrees with it.
+// Rather than test the callback against a non-authoritative oracle, the
+// purego-driven stack-spill tests are skipped and the C-driven ones in
+// TestCallbackFromC provide the real coverage.
+func requirePuregoStackLayout(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" {
+		t.Skip("purego's caller uses 8-byte stack slots on darwin/arm64; " +
+			"Apple-packed stack callbacks are verified against a C compiler in TestCallbackFromC")
+	}
+}
 
 // TestNewCallbackForwarded exercises the backend-forwarded path
 // (integer-like arguments and return value).
@@ -17,8 +42,11 @@ func TestNewCallbackForwarded(t *testing.T) {
 }
 
 // TestNewCallbackNativeInts forces the native thunk with integer register
-// and stack arguments on every supported platform.
+// and stack arguments. Uses CallRaw (purego SyscallN), whose stack layout
+// matches the callback everywhere except darwin/arm64; the C compiler
+// covers that platform in TestCallbackFromC (test_cb_stack_i12).
 func TestNewCallbackNativeInts(t *testing.T) {
+	requirePuregoStackLayout(t)
 	cb := newCallbackNative(func(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12 Int) Int {
 		return a1*1 + a2*2 + a3*3 + a4*4 + a5*5 + a6*6 + a7*7 + a8*8 + a9*9 + a10*10 + a11*11 + a12*12
 	})

@@ -43,6 +43,7 @@ func TestCallbackFloatArgsIntRet(t *testing.T) {
 // TestCallbackStackArgs passes more arguments than there are registers so
 // both integer and float values spill onto the C stack.
 func TestCallbackStackArgs(t *testing.T) {
+	requirePuregoStackLayout(t)
 	cb := NewCallback(func(i1, i2, i3, i4, i5, i6, i7, i8, i9, i10 Int,
 		f1, f2, f3, f4, f5, f6, f7, f8, f9, f10 Double) Double {
 		is := i1 + i2 + i3 + i4 + i5 + i6 + i7 + i8 + i9 + i10
@@ -61,6 +62,7 @@ func TestCallbackStackArgs(t *testing.T) {
 // TestCallbackStackFloat32Args exercises float32 stack arguments, which
 // Darwin arm64 packs into 4-byte slots.
 func TestCallbackStackFloat32Args(t *testing.T) {
+	requirePuregoStackLayout(t)
 	cb := NewCallback(func(f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11 Float) Float {
 		return f1 + f2 + f3 + f4 + f5 + f6 + f7 + f8 + f9 + f10 + f11
 	})
