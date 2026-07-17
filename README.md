@@ -122,6 +122,50 @@ func main() {
 }
 ```
 
+### 4. Callbacks with Float/Struct Return Values
+
+`cgo.NewCallback` converts a Go function into a C function pointer. Unlike
+`purego.NewCallback` (and `syscall.NewCallback` on Windows), it also supports
+**float32/float64 and struct return values**, backed by this package's own
+assembly thunks on linux/amd64, linux/arm64, darwin/amd64, darwin/arm64 and
+windows/amd64. Signatures that the underlying backend already supports are
+forwarded to it unchanged.
+
+```go
+package main
+
+import "github.com/goexlib/cgo"
+
+type Point struct {
+    X, Y cgo.Float
+}
+
+func main() {
+    // A callback returning a struct (not possible with purego.NewCallback):
+    cb := cgo.NewCallback(func(x, y cgo.Float) Point {
+        return Point{X: x * 2, Y: y * 2}
+    })
+
+    // Pass cb to a C function expecting: Point (*)(float, float)
+    _ = cb
+}
+```
+
+Supported callback signatures:
+
+| | integer/pointer/bool args | float args | float return | struct return | struct args |
+|---|---|---|---|---|---|
+| linux/amd64, linux/arm64 | ✅ | ✅ | ✅ | ✅ | ❌ |
+| darwin/amd64, darwin/arm64 | ✅ | ✅ | ✅ | ✅ | ❌ |
+| windows/amd64 | ✅ | ✅ | ✅ | ✅ | ❌ |
+| other purego platforms | ✅ | ✅ | ❌ | ❌ | ❌ |
+
+Struct return types must have the same memory layout as the C struct
+(including padding). Homogeneous float aggregates, small structs in
+registers and large structs through the hidden result pointer all follow
+the platform C ABI (System V AMD64, AAPCS64 incl. Apple's stack packing,
+and the Microsoft x64 convention).
+
 ## Platform-Specific Notes
 
 ### Windows
