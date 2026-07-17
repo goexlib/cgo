@@ -42,6 +42,24 @@ export int test_cb_stack(double (*cb)(int, int, int, int, int, int, int, int, in
     return r == 105.0 ? 0 : 1;
 }
 
+// 12 int arguments: 8 in registers (x0-x7), 4 on the stack. On Darwin ARM64
+// the four stack ints are packed at 4-byte offsets, not 8-byte slots.
+export int test_cb_stack_i12(int (*cb)(int, int, int, int, int, int,
+                                       int, int, int, int, int, int)) {
+    int r = cb(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
+    // 1*1 + 2*2 + ... + 12*12 = 650
+    return r == 650 ? 0 : 1;
+}
+
+// 11 float arguments: 8 in registers (v0-v7), 3 on the stack, packed at
+// 4-byte offsets on Darwin ARM64.
+export int test_cb_stack_f11(float (*cb)(float, float, float, float, float, float,
+                                         float, float, float, float, float)) {
+    float r = cb(0.5f, 1.5f, 2.5f, 3.5f, 4.5f, 5.5f,
+                 6.5f, 7.5f, 8.5f, 9.5f, 10.5f);
+    return r == 60.5f ? 0 : 1;
+}
+
 typedef struct PointF {
     float x, y;
 } PointF;
