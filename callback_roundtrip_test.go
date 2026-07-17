@@ -4,12 +4,8 @@ package cgo
 
 import "testing"
 
-// The tests in this file call the created callbacks through
-// purego.RegisterFunc (via CallRet), which implements the full C calling
-// convention for the call direction, including float registers and struct
-// return values. This round-trips every value through the real ABI:
-// purego encodes the call exactly like a C caller would, and decodes the
-// return registers exactly like a C caller would.
+// The tests in this file round-trip callbacks through CallRet
+// (purego.RegisterFunc), which drives them following the C calling convention.
 
 func TestCallbackRetFloat64(t *testing.T) {
 	cb := NewCallback(func(a, b Double) Double {
@@ -29,8 +25,7 @@ func TestCallbackRetFloat32(t *testing.T) {
 	}
 }
 
-// TestCallbackFloatArgsIntRet exercises float arguments with an integer
-// return value (forwarded to purego on unix).
+// TestCallbackFloatArgsIntRet exercises float arguments with an integer return.
 func TestCallbackFloatArgsIntRet(t *testing.T) {
 	cb := NewCallback(func(a Double, b Float, c Int) Int {
 		return Int(a) + Int(b) + c
@@ -59,8 +54,7 @@ func TestCallbackStackArgs(t *testing.T) {
 	}
 }
 
-// TestCallbackStackFloat32Args exercises float32 stack arguments, which
-// Darwin arm64 packs into 4-byte slots.
+// TestCallbackStackFloat32Args exercises float32 stack arguments.
 func TestCallbackStackFloat32Args(t *testing.T) {
 	requirePuregoStackLayout(t)
 	cb := NewCallback(func(f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11 Float) Float {
@@ -94,8 +88,7 @@ func TestCallbackRetStructThreeFloat32(t *testing.T) {
 	}
 }
 
-// TestCallbackRetStructFourFloat64 returns a 32-byte homogeneous float
-// aggregate: D0-D3 on arm64, hidden pointer on amd64.
+// TestCallbackRetStructFourFloat64 returns a 32-byte homogeneous float aggregate.
 func TestCallbackRetStructFourFloat64(t *testing.T) {
 	cb := NewCallback(func(a Double) testQuad {
 		return testQuad{A: a, B: a * 2, C: a * 3, D: a * 4}
@@ -107,14 +100,10 @@ func TestCallbackRetStructFourFloat64(t *testing.T) {
 	}
 }
 
-// Note: structs with array fields (e.g. struct{ V [2]Float; W Float }) are
-// encoded by NewCallback following the real C ABI (arrays flatten for the
-// HFA/SSE classification), but purego's call direction does not flatten
-// arrays, so they cannot be round-tripped here. They are verified against a
-// real C compiler in callback_clib_test.go instead.
+// Structs with array fields are not round-tripped here (purego's call
+// direction does not flatten arrays); they are covered in callback_clib_test.go.
 
-// TestCallbackRetStructMixed returns a 16-byte struct with mixed
-// integer/float fields: RAX+XMM0 on SysV amd64, X0/X1 on arm64.
+// TestCallbackRetStructMixed returns a 16-byte struct with mixed int/float fields.
 func TestCallbackRetStructMixed(t *testing.T) {
 	cb := NewCallback(func(a Int, b Float, c Double) testMixed {
 		return testMixed{A: a + 1, B: b + 0.5, C: c + 0.25}
@@ -126,8 +115,7 @@ func TestCallbackRetStructMixed(t *testing.T) {
 	}
 }
 
-// TestCallbackRetStructIntPair returns a 16-byte integer struct:
-// RAX/RDX on SysV amd64, X0/X1 on arm64.
+// TestCallbackRetStructIntPair returns a 16-byte integer struct.
 func TestCallbackRetStructIntPair(t *testing.T) {
 	cb := NewCallback(func(a, b LongLong) testIntPair {
 		return testIntPair{A: a * 2, B: b * 3}
@@ -152,8 +140,7 @@ func TestCallbackRetStructSmallInts(t *testing.T) {
 	}
 }
 
-// TestCallbackRetStructBig returns a 24-byte struct through the hidden
-// result pointer (RDI on SysV amd64, X8 on arm64).
+// TestCallbackRetStructBig returns a 24-byte struct through the hidden result pointer.
 func TestCallbackRetStructBig(t *testing.T) {
 	cb := NewCallback(func(a LongLong) testBig {
 		return testBig{A: a, B: a * 2, C: a * 3}
@@ -182,9 +169,7 @@ func TestCallbackRetStructBigWithArgs(t *testing.T) {
 	}
 }
 
-// TestCallbackRetStructFloatIntFloat returns a 12-byte struct whose chunks
-// are INTEGER,INTEGER on SysV amd64 (float+int share a chunk) and X0/X1 on
-// arm64 (not an HFA).
+// TestCallbackRetStructFloatIntFloat returns a 12-byte struct that is not an HFA.
 func TestCallbackRetStructFloatIntFloat(t *testing.T) {
 	cb := NewCallback(func() testFloatIntFloat {
 		return testFloatIntFloat{A: 1.5, B: 2, C: 3.5}
@@ -196,8 +181,7 @@ func TestCallbackRetStructFloatIntFloat(t *testing.T) {
 	}
 }
 
-// TestCallbackRetStructOneFloat returns a 4-byte single-float struct:
-// XMM0 on SysV amd64, S0 on arm64.
+// TestCallbackRetStructOneFloat returns a 4-byte single-float struct.
 func TestCallbackRetStructOneFloat(t *testing.T) {
 	cb := NewCallback(func(v Float) testOneFloat {
 		return testOneFloat{V: v + 0.25}

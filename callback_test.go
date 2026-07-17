@@ -7,30 +7,17 @@ import (
 	"testing"
 )
 
-// requirePuregoStackLayout skips a test on platforms where purego's own
-// caller (used by CallRaw and CallRet in these tests) does not lay out
-// stack arguments the way a real C compiler — and therefore this package's
-// callbacks — do.
-//
-// On darwin/arm64 the Apple C ABI packs stack arguments to their natural
-// alignment (e.g. two int32 stack arguments occupy 4 bytes each, not 8).
-// The callbacks implement that packing, verified against a real C compiler
-// in TestCallbackFromC. purego's caller (SyscallN, and the RegisterFunc
-// bundling used by CallRet) instead presents 8-byte stack slots here, so a
-// callback that correctly reads packed stack arguments disagrees with it.
-// Rather than test the callback against a non-authoritative oracle, the
-// purego-driven stack-spill tests are skipped and the C-driven ones in
-// TestCallbackFromC provide the real coverage.
+// requirePuregoStackLayout skips stack-spill tests on darwin/arm64, where
+// purego's caller uses 8-byte stack slots instead of Apple's packed layout.
+// Those callbacks are covered against a real C compiler in TestCallbackFromC.
 func requirePuregoStackLayout(t *testing.T) {
 	t.Helper()
 	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" {
-		t.Skip("purego's caller uses 8-byte stack slots on darwin/arm64; " +
-			"Apple-packed stack callbacks are verified against a C compiler in TestCallbackFromC")
+		t.Skip("stack-argument callbacks are verified in TestCallbackFromC on darwin/arm64")
 	}
 }
 
-// TestNewCallbackForwarded exercises the backend-forwarded path
-// (integer-like arguments and return value).
+// TestNewCallbackForwarded exercises the backend-forwarded path.
 func TestNewCallbackForwarded(t *testing.T) {
 	cb := NewCallback(func(a, b Int) Int {
 		return a*10 + b
@@ -42,9 +29,7 @@ func TestNewCallbackForwarded(t *testing.T) {
 }
 
 // TestNewCallbackNativeInts forces the native thunk with integer register
-// and stack arguments. Uses CallRaw (purego SyscallN), whose stack layout
-// matches the callback everywhere except darwin/arm64; the C compiler
-// covers that platform in TestCallbackFromC (test_cb_stack_i12).
+// and stack arguments.
 func TestNewCallbackNativeInts(t *testing.T) {
 	requirePuregoStackLayout(t)
 	cb := newCallbackNative(func(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12 Int) Int {
@@ -60,7 +45,7 @@ func TestNewCallbackNativeInts(t *testing.T) {
 	}
 }
 
-// testCbPtrTarget is package-level so its address is stable while the raw
+// testCbPtrTarget is package-level so its address stays stable while the raw
 // pointer travels through the C calling convention.
 var testCbPtrTarget Int
 

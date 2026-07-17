@@ -7,13 +7,10 @@ import (
 	"testing"
 )
 
-// The tests in this file verify the callbacks against real C code compiled
-// by a real C compiler (the authoritative ABI implementation). Every
-// test_cb_* function in testdata/libcallback.c invokes the callback with
-// hard-coded arguments, checks the result in C and returns 0 on success.
-//
-// Build the library first (see testdata/libcallback.c for the exact
-// commands), the tests are skipped when it is missing.
+// TestCallbackFromC verifies the callbacks against real C code. Every
+// test_cb_* function in testdata/libcallback.c invokes the callback and
+// returns 0 on success. Build the library first (see testdata/libcallback.c);
+// the test is skipped when it is missing.
 
 func loadCallbackTestLib(t *testing.T) Library {
 	t.Helper()
@@ -74,10 +71,7 @@ func TestCallbackFromC(t *testing.T) {
 		return Double(is) + fs
 	}))
 
-	// 12 int / 11 float32 arguments spill onto the stack. These are the
-	// authoritative (real C compiler) checks for stack-argument callbacks,
-	// especially Apple's packed ARM64 stack layout, which purego's own
-	// caller does not reproduce (see requirePuregoStackLayout).
+	// 12 int / 11 float32 arguments spill onto the stack.
 	runCbTest(t, lib, "test_cb_stack_i12", NewCallback(func(
 		a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12 Int) Int {
 		return a1*1 + a2*2 + a3*3 + a4*4 + a5*5 + a6*6 +
