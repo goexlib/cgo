@@ -45,12 +45,10 @@ func Dlclose(handle uintptr) error {
 // NewCallback converts a Go function to a C function pointer that can be
 // passed to C code as a callback.
 //
-// On windows/amd64 it additionally supports float32/float64 arguments as
-// well as float32/float64 and struct return values (which syscall.NewCallback
-// does not): such callbacks are backed by this package's own assembly thunk,
-// everything else is forwarded to syscall.NewCallback. Struct arguments are
-// not supported. Struct return types must have the same memory layout as
-// their C counterpart (add explicit padding fields if needed).
+// On windows/amd64 the full Microsoft x64 calling convention is supported,
+// including float32/float64 and struct arguments and return values. Struct
+// types must have the same memory layout as their C counterpart (add explicit
+// padding fields if needed).
 //
 // Only a limited number of callbacks may be created in a single Go process,
 // and any memory allocated for these callbacks is never released.

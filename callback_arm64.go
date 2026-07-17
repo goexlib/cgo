@@ -14,26 +14,12 @@ import (
 // (a MOVD plus a B instruction).
 const cbEntrySize = 8
 
-// cbBackendSupported reports whether purego.NewCallback can handle the
-// signature. purego supports integer-like and float arguments, but only
-// integer-like (or no) return values.
-func cbBackendSupported(ty reflect.Type) bool {
-	if ty.NumOut() == 0 {
-		return true
-	}
-	switch ty.Out(0).Kind() {
-	case reflect.Bool,
-		reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
-		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64,
-		reflect.Uintptr, reflect.Ptr, reflect.UnsafePointer:
-		return true
-	}
-	return false
-}
-
-func cbBackendNewCallback(fn any) uintptr {
-	return purego.NewCallback(fn)
-}
+// aapcsIntRegs and aapcsFltRegs are the number of integer and float argument
+// registers on the AAPCS64 calling convention (X0-X7 and D0-D7).
+const (
+	aapcsIntRegs = 8
+	aapcsFltRegs = 8
+)
 
 func cbNewDispatchTrampoline() uintptr {
 	return purego.NewCallback(cbDispatch)
@@ -42,9 +28,9 @@ func cbNewDispatchTrampoline() uintptr {
 // buildCbArgPlan assigns the arguments following the AAPCS64 calling
 // convention: integer-like arguments take X0-X7, float arguments take
 // D0-D7 and the rest goes onto the stack. Linux uses 8-byte stack slots
-// while Darwin packs stack arguments to their natural alignment.
+// while Darwin packs stack arguments to their natural alignment. Structs are
+// classified per the ABI (see classifyStructArg).
 func buildCbArgPlan(ty reflect.Type, sret bool) []cbArgLoc {
-	const intRegs, fltRegs = 8, 8
 	ints, floats := 0, 0
 	// The hidden struct return pointer uses the dedicated X8 register on
 	// arm64, so sret does not consume an argument register.
@@ -54,32 +40,96 @@ func buildCbArgPlan(ty reflect.Type, sret bool) []cbArgLoc {
 	for i := range locs {
 		t := ty.In(i)
 		locs[i].typ = t
+		if t.Kind() == reflect.Struct {
+			locs[i] = classifyStructArg(t, &ints, &floats, &stackOff)
+			continue
+		}
 		isFloat := t.Kind() == reflect.Float32 || t.Kind() == reflect.Float64
-		if isFloat && floats < fltRegs {
+		if isFloat && floats < aapcsFltRegs {
 			locs[i].src = cbSrcFloatReg
 			locs[i].reg = floats
 			floats++
 			continue
 		}
-		if !isFloat && ints < intRegs {
+		if !isFloat && ints < aapcsIntRegs {
 			locs[i].src = cbSrcIntReg
 			locs[i].reg = ints
 			ints++
 			continue
 		}
 		locs[i].src = cbSrcStack
-		if runtime.GOOS == "darwin" {
-			// Darwin packs stack arguments to their natural alignment.
-			align := uintptr(t.Align())
-			stackOff = (stackOff + align - 1) &^ (align - 1)
-			locs[i].off = stackOff
-			stackOff += t.Size()
-		} else {
-			locs[i].off = stackOff
-			stackOff += 8
-		}
+		locs[i].soff = aapcsStackPush(t, &stackOff)
 	}
 	return locs
+}
+
+// aapcsStackPush reserves a stack slot for a value passed by value and returns
+// its offset. Linux rounds each argument to an 8-byte slot; Darwin packs
+// arguments to their natural alignment.
+func aapcsStackPush(t reflect.Type, stackOff *uintptr) uintptr {
+	if runtime.GOOS == "darwin" {
+		off := cbAlignUp(*stackOff, uintptr(t.Align()))
+		*stackOff = off + t.Size()
+		return off
+	}
+	off := *stackOff
+	*stackOff += cbAlignUp(t.Size(), 8)
+	return off
+}
+
+// classifyStructArg places a struct argument following the AAPCS64 calling
+// convention. An HFA (<=4 same-typed float members) is passed in float
+// registers; a non-HFA struct up to 16 bytes is passed in integer registers;
+// a larger struct is passed by reference (a pointer in a register or on the
+// stack). Anything that does not fit in registers is passed on the stack.
+func classifyStructArg(t reflect.Type, ints, floats *int, stackOff *uintptr) cbArgLoc {
+	size := t.Size()
+	if size == 0 {
+		return cbArgLoc{typ: t, kind: cbArgZero}
+	}
+	if ok, n, elem64 := cbIsHFA(t); ok {
+		if *floats+n <= aapcsFltRegs {
+			memSize := uintptr(4)
+			if elem64 {
+				memSize = 8
+			}
+			pieces := make([]cbArgPiece, n)
+			for i := 0; i < n; i++ {
+				pieces[i] = cbArgPiece{src: cbSrcFloatReg, reg: *floats, doff: uintptr(i) * memSize, size: memSize}
+				*floats++
+			}
+			return cbArgLoc{typ: t, kind: cbArgAssemble, pieces: pieces}
+		}
+		*floats = aapcsFltRegs // NSRN = 8: later float args also go on the stack
+		return cbArgLoc{typ: t, kind: cbArgDirect, src: cbSrcStack, soff: aapcsStackPush(t, stackOff)}
+	}
+	if size <= 16 {
+		n := int((size + 7) / 8)
+		if *ints+n <= aapcsIntRegs {
+			pieces := make([]cbArgPiece, n)
+			for c := 0; c < n; c++ {
+				sz := size - uintptr(c)*8
+				if sz > 8 {
+					sz = 8
+				}
+				pieces[c] = cbArgPiece{src: cbSrcIntReg, reg: *ints, doff: uintptr(c) * 8, size: sz}
+				*ints++
+			}
+			return cbArgLoc{typ: t, kind: cbArgAssemble, pieces: pieces}
+		}
+		*ints = aapcsIntRegs // NGRN = 8: later integer args also go on the stack
+		return cbArgLoc{typ: t, kind: cbArgDirect, src: cbSrcStack, soff: aapcsStackPush(t, stackOff)}
+	}
+	// Larger than 16 bytes: passed by reference. The pointer takes the next
+	// integer register, or a stack slot when the integer registers are full.
+	if *ints < aapcsIntRegs {
+		loc := cbArgLoc{typ: t, kind: cbArgIndirect, src: cbSrcIntReg, reg: *ints}
+		*ints++
+		return loc
+	}
+	loc := cbArgLoc{typ: t, kind: cbArgIndirect, src: cbSrcStack, soff: *stackOff}
+	*stackOff += 8
+	return loc
 }
 
 // buildCbRetPlan classifies the return value following AAPCS64:

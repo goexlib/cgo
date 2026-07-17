@@ -132,6 +132,72 @@ func TestCallbackFromC(t *testing.T) {
 		NewCallback(func(v Int) { voidGot = v }),
 		NewCallback(func() Int { return voidGot }))
 
+	// Struct arguments. Each callback checks its fields and returns 0/errcode.
+	runCbTest(t, lib, "test_cb_arg_pointf", NewCallback(func(a, b testPointF) Int {
+		if a.X != 1.5 || a.Y != 2.5 {
+			return 1
+		}
+		if b.X != 3.5 || b.Y != 4.5 {
+			return 2
+		}
+		return 0
+	}))
+
+	runCbTest(t, lib, "test_cb_arg_mixed", NewCallback(func(m testMixed) Int {
+		if m.A != 10 || m.B != 1.5 || m.C != 2.5 {
+			return 1
+		}
+		return 0
+	}))
+
+	runCbTest(t, lib, "test_cb_arg_int_pair", NewCallback(func(p testIntPair) Int {
+		if p.A != 100 || p.B != 200 {
+			return 1
+		}
+		return 0
+	}))
+
+	runCbTest(t, lib, "test_cb_arg_vec3", NewCallback(func(v testVec3) Int {
+		if v.X != 1.5 || v.Y != 2.5 || v.Z != 3.5 {
+			return 1
+		}
+		return 0
+	}))
+
+	runCbTest(t, lib, "test_cb_arg_quad", NewCallback(func(q testQuad) Int {
+		if q.A != 1.5 || q.B != 2.5 || q.C != 3.5 || q.D != 4.5 {
+			return 1
+		}
+		return 0
+	}))
+
+	runCbTest(t, lib, "test_cb_arg_big", NewCallback(func(b testBig) Int {
+		if b.A != 10 || b.B != 20 || b.C != 30 {
+			return 1
+		}
+		return 0
+	}))
+
+	runCbTest(t, lib, "test_cb_arg_surrounded", NewCallback(func(pre Int, m testMixed, post Double) Int {
+		if pre != 7 || post != 9.0 {
+			return 1
+		}
+		if m.A != 10 || m.B != 1.5 || m.C != 2.5 {
+			return 2
+		}
+		return 0
+	}))
+
+	runCbTest(t, lib, "test_cb_arg_spill", NewCallback(func(a, b, c, d, e, f LongLong, p testIntPair) Int {
+		if a != 1 || b != 2 || c != 3 || d != 4 || e != 5 || f != 6 {
+			return 1
+		}
+		if p.A != 100 || p.B != 200 {
+			return 2
+		}
+		return 0
+	}))
+
 	// Invoke a float-returning callback from a foreign C thread.
 	runCbTest(t, lib, "test_cb_thread", NewCallback(func(a, b Double) Double {
 		return a + b

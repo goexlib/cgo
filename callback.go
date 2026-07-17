@@ -65,12 +65,43 @@ const (
 	cbSrcStack
 )
 
+type cbArgKind uint8
+
+const (
+	// cbArgDirect views the argument value directly at a single source slot
+	// (a scalar in a register, or a struct laid out contiguously on the
+	// stack or within one register).
+	cbArgDirect cbArgKind = iota
+	// cbArgAssemble builds a struct value by copying one piece per source
+	// slot (a struct spread across several registers).
+	cbArgAssemble
+	// cbArgIndirect reads a pointer to the argument value from a single
+	// source slot (a large struct passed by reference).
+	cbArgIndirect
+	// cbArgZero is a zero-sized struct that consumes no register or stack.
+	cbArgZero
+)
+
+// cbArgPiece copies size bytes from a source slot into the argument value at
+// byte offset doff.
+type cbArgPiece struct {
+	src  cbArgSrc
+	reg  int     // register index when src != cbSrcStack
+	soff uintptr // stack byte offset when src == cbSrcStack
+	doff uintptr // destination byte offset within the value
+	size uintptr
+}
+
 // cbArgLoc describes where one callback argument comes from.
 type cbArgLoc struct {
-	typ reflect.Type
-	src cbArgSrc
-	reg int     // register index when src != cbSrcStack
-	off uintptr // byte offset into the stack arguments when src == cbSrcStack
+	typ  reflect.Type
+	kind cbArgKind
+	// Direct and indirect kinds read from a single slot.
+	src  cbArgSrc
+	reg  int
+	soff uintptr
+	// Assemble kind copies these pieces into a freshly allocated value.
+	pieces []cbArgPiece
 }
 
 type cbRetKind uint8
@@ -111,11 +142,8 @@ var cbs struct {
 	entries [cbMaxCallbacks]*cbEntry
 }
 
-// newCallback converts a Go function to a C function pointer.
-// If the backend (purego on unix, syscall on windows) supports the
-// signature, it is forwarded there. Otherwise (float/struct return values,
-// float arguments on windows) the callback is backed by this package's own
-// assembly thunk.
+// newCallback converts a Go function to a C function pointer backed by this
+// package's own assembly thunk and argument/return-value marshalling.
 func newCallback(fn any) uintptr {
 	if fn == nil {
 		panic("cgo.NewCallback: fn must not be nil")
@@ -140,14 +168,10 @@ func newCallback(fn any) uintptr {
 	if ty.NumOut() == 1 {
 		checkCbRetType(ty.Out(0))
 	}
-	if cbBackendSupported(ty) {
-		return cbBackendNewCallback(fn)
-	}
 	return newCallbackNative(fn)
 }
 
-// newCallbackNative always uses this package's own callback machinery,
-// bypassing the backend even for signatures it could handle.
+// newCallbackNative registers the callback and returns its C entry address.
 func newCallbackNative(fn any) uintptr {
 	ensureCbTrampoline()
 
@@ -179,7 +203,7 @@ func checkCbArgType(t reflect.Type) {
 		reflect.Uintptr, reflect.Float32, reflect.Float64,
 		reflect.Ptr, reflect.UnsafePointer:
 	case reflect.Struct:
-		panic("cgo.NewCallback: struct arguments are not supported")
+		checkCbStructFields(t)
 	default:
 		panic("cgo.NewCallback: unsupported argument type: " + t.Kind().String())
 	}
@@ -193,13 +217,13 @@ func checkCbRetType(t reflect.Type) {
 		reflect.Uintptr, reflect.Float32, reflect.Float64,
 		reflect.Ptr, reflect.UnsafePointer:
 	case reflect.Struct:
-		checkCbRetStructFields(t)
+		checkCbStructFields(t)
 	default:
 		panic("cgo.NewCallback: unsupported return type: " + t.Kind().String())
 	}
 }
 
-func checkCbRetStructFields(t reflect.Type) {
+func checkCbStructFields(t reflect.Type) {
 	for i := 0; i < t.NumField(); i++ {
 		ft := t.Field(i).Type
 		for ft.Kind() == reflect.Array {
@@ -212,7 +236,7 @@ func checkCbRetStructFields(t reflect.Type) {
 			reflect.Uintptr, reflect.Float32, reflect.Float64,
 			reflect.Ptr, reflect.UnsafePointer:
 		case reflect.Struct:
-			checkCbRetStructFields(ft)
+			checkCbStructFields(ft)
 		default:
 			panic("cgo.NewCallback: unsupported struct field type: " + ft.Kind().String())
 		}
@@ -231,16 +255,23 @@ func cbDispatch(f *cbFrame) uintptr {
 	args := make([]reflect.Value, len(entry.args))
 	for i := range entry.args {
 		loc := &entry.args[i]
-		var p unsafe.Pointer
-		switch loc.src {
-		case cbSrcIntReg:
-			p = unsafe.Pointer(&f.ints[loc.reg])
-		case cbSrcFloatReg:
-			p = unsafe.Pointer(&f.floats[loc.reg])
-		default:
-			p = unsafe.Add(f.stack, loc.off)
+		switch loc.kind {
+		case cbArgDirect:
+			args[i] = reflect.NewAt(loc.typ, cbSlotPtr(f, loc.src, loc.reg, loc.soff)).Elem()
+		case cbArgIndirect:
+			ptr := *(*unsafe.Pointer)(cbSlotPtr(f, loc.src, loc.reg, loc.soff))
+			args[i] = reflect.NewAt(loc.typ, ptr).Elem()
+		case cbArgZero:
+			args[i] = reflect.Zero(loc.typ)
+		default: // cbArgAssemble
+			v := reflect.New(loc.typ).Elem()
+			dst := v.Addr().UnsafePointer()
+			for j := range loc.pieces {
+				pc := &loc.pieces[j]
+				Memcpy(unsafe.Add(dst, pc.doff), cbSlotPtr(f, pc.src, pc.reg, pc.soff), Sizet(pc.size))
+			}
+			args[i] = v
 		}
-		args[i] = reflect.NewAt(loc.typ, p).Elem()
 	}
 
 	rets := entry.fn.Call(args)
@@ -305,4 +336,21 @@ func cbChunk(p unsafe.Pointer, off, size uintptr) uintptr {
 // go vet happy (same trick as purego).
 func cbPointer(v *uintptr) unsafe.Pointer {
 	return *(*unsafe.Pointer)(unsafe.Pointer(v))
+}
+
+// cbSlotPtr returns the address of an argument source slot in the frame.
+func cbSlotPtr(f *cbFrame, src cbArgSrc, reg int, soff uintptr) unsafe.Pointer {
+	switch src {
+	case cbSrcIntReg:
+		return unsafe.Pointer(&f.ints[reg])
+	case cbSrcFloatReg:
+		return unsafe.Pointer(&f.floats[reg])
+	default:
+		return unsafe.Add(f.stack, soff)
+	}
+}
+
+// cbAlignUp rounds v up to the next multiple of a (a power of two).
+func cbAlignUp(v, a uintptr) uintptr {
+	return (v + a - 1) &^ (a - 1)
 }
