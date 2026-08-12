@@ -35,7 +35,7 @@ func call(fn uintptr, ret any, args ...any) {
 		argVal := reflect.ValueOf(arg)
 		switch argType.Kind() {
 		case reflect.String:
-			p := CString(argVal.String())
+			p := CStringTemp(argVal.String())
 			defer runtime.KeepAlive(p)
 			rawArgs = append(rawArgs, uintptr(p))
 		case reflect.Bool:
