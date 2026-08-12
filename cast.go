@@ -62,16 +62,37 @@ func GoBool[T comparable](v T) bool {
 	return v != zero
 }
 
+// CString converts a Go string to a NUL-terminated C string allocated on the
+// C heap with Malloc. The caller owns the memory and must release it with
+// Free once it is no longer needed. A fresh copy is always made, even when s
+// already ends with a NUL byte. CString("") returns a pointer to a single NUL
+// byte. It panics when the allocation fails.
 func CString(s string) unsafe.Pointer {
-	if len(s) != 0 {
-		if s[len(s)-1] == 0 {
-			return unsafe.Pointer(unsafe.StringData(s))
-		}
-		buf := make([]byte, len(s)+1)
-		copy(buf, s)
-		return CSlice(buf)
+	p := Malloc(Sizet(len(s) + 1))
+	if p == nil {
+		panic("cgo.CString: out of memory")
 	}
-	return nil
+	buf := GoSliceNTemp[byte](p, len(s)+1)
+	copy(buf, s)
+	buf[len(s)] = 0
+	return p
+}
+
+// CStringTemp returns a borrowed pointer to a NUL-terminated copy of s backed
+// by Go memory. It is valid only while s is kept alive (e.g. with
+// runtime.KeepAlive) and must not be freed. When s already ends with a NUL
+// byte the pointer aliases s's data without copying; otherwise a temporary Go
+// buffer is allocated. CStringTemp("") returns nil.
+func CStringTemp(s string) unsafe.Pointer {
+	if len(s) == 0 {
+		return nil
+	}
+	if s[len(s)-1] == 0 {
+		return unsafe.Pointer(unsafe.StringData(s))
+	}
+	buf := make([]byte, len(s)+1)
+	copy(buf, s)
+	return CSlice(buf)
 }
 
 func CBool(b bool) int8 {
