@@ -94,6 +94,11 @@ func (s *LazySymbol) Addr() uintptr {
 	return s.sym
 }
 
+// CallRaw resolves the symbol and calls it synchronously. It has the same
+// pointer lifetime contract as the package function, including during symbol
+// resolution, which may allocate or grow the Go stack before the native call.
+//
+//go:uintptrescapes
 func (s *LazySymbol) CallRaw(args ...uintptr) (r1, r2 uintptr, err error) {
 	if err = s.Find(); err != nil {
 		return 0, 0, err

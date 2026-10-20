@@ -47,6 +47,12 @@ func NewCallback(fn any) uintptr {
 	return newCallback(fn)
 }
 
+// CallRaw calls a native function synchronously. Convert Go pointers to uintptr
+// directly in this call's arguments; they remain live and address-stable until
+// it returns. Stored uintptr values and addresses retained by C after return
+// require explicit ownership/lifetime management by the caller.
+//
+//go:uintptrescapes
 func CallRaw(fn uintptr, args ...uintptr) (r1, r2 uintptr, err syscall.Errno) {
 	r1, r2, e := purego.SyscallN(fn, args...)
 	return r1, r2, syscall.Errno(e)

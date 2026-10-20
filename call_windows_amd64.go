@@ -15,6 +15,12 @@ func callRet[T any](fn uintptr, args ...any) (ret T) {
 
 func call(fn uintptr, ret any, args ...any) {
 	const PointerSize = unsafe.Sizeof(uintptr(0))
+	// rawArgs contains integers, not GC roots. Preserve the typed arguments and
+	// pin the buffers whose addresses the Microsoft x64 ABI passes indirectly.
+	var pin runtime.Pinner
+	defer pin.Unpin()
+	defer runtime.KeepAlive(args)
+	defer runtime.KeepAlive(ret)
 
 	rawArgs := make([]uintptr, 0, len(args)+1)
 	var retType reflect.Type
@@ -23,8 +29,9 @@ func call(fn uintptr, ret any, args ...any) {
 		checkReturnType(retType)
 
 		if retType.Kind() != reflect.String && retType.Size() > PointerSize {
+			pin.Pin(ret)
 			rp := (*iface)(unsafe.Pointer(&ret)).val
-			rawArgs = append(rawArgs, rp)
+			rawArgs = append(rawArgs, uintptr(rp))
 		}
 	}
 
@@ -36,7 +43,7 @@ func call(fn uintptr, ret any, args ...any) {
 		switch argType.Kind() {
 		case reflect.String:
 			p := CStringTemp(argVal.String())
-			defer runtime.KeepAlive(p)
+			pin.Pin(p)
 			rawArgs = append(rawArgs, uintptr(p))
 		case reflect.Bool:
 			rawArgs = append(rawArgs, uintptr(CBool(argVal.Bool())))
@@ -49,15 +56,19 @@ func call(fn uintptr, ret any, args ...any) {
 		case reflect.Float64:
 			rawArgs = append(rawArgs, uintptr(math.Float64bits(argVal.Float())))
 		case reflect.Pointer, reflect.UnsafePointer:
+			if !argVal.IsNil() {
+				pin.Pin(arg)
+			}
 			rawArgs = append(rawArgs, argVal.Pointer())
 		default:
 			v := (*iface)(unsafe.Pointer(&arg))
 			if size := argType.Size(); size <= PointerSize {
 				rawArgs = append(rawArgs, 0)
-				Memcpy(unsafe.Pointer(&rawArgs[len(rawArgs)-1]), unsafe.Pointer(v.val), Sizet(argType.Size()))
+				Memcpy(unsafe.Pointer(&rawArgs[len(rawArgs)-1]), v.val, Sizet(argType.Size()))
 			} else {
 				// pass address
-				rawArgs = append(rawArgs, v.val)
+				pin.Pin(v.val)
+				rawArgs = append(rawArgs, uintptr(v.val))
 			}
 		}
 	}
@@ -81,7 +92,7 @@ func call(fn uintptr, ret any, args ...any) {
 		default:
 			if size := retType.Size(); size <= PointerSize {
 				rv := (*iface)(unsafe.Pointer(&ret)).val
-				Memcpy(unsafe.Pointer(rv), unsafe.Pointer(&r1), Sizet(size))
+				Memcpy(rv, unsafe.Pointer(&r1), Sizet(size))
 			}
 		}
 	}
@@ -110,6 +121,6 @@ func checkCgoType(typ reflect.Type) {
 }
 
 type iface struct {
-	typ uintptr
-	val uintptr
+	typ unsafe.Pointer
+	val unsafe.Pointer
 }

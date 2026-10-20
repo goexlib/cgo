@@ -168,6 +168,11 @@ AAPCS64 incl. Apple's stack packing, and the Microsoft x64 convention).
 
 ## Platform-Specific Notes
 
+For Go memory passed to native code, see the [pointer lifetime contract](doc/PointerLifetime.md).
+Raw calls require pointer-to-uintptr conversions directly in the call arguments;
+typed calls should receive pointers as pointers. Memory retained after return
+needs an explicit owner and lifetime.
+
 ### Windows
 - Searches in: application directory, system directories, `PATH`
 - Supports both `stdcall` and `cdecl` calling conventions (X64 ABI)

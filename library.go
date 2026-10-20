@@ -34,6 +34,11 @@ func (s Symbol) Addr() uintptr {
 	return uintptr(s)
 }
 
+// CallRaw has the same pointer lifetime contract as the package function.
+// The annotation is required here too: inner calls cannot recover a pointer
+// whose conversion at this entry point has already lost escape information.
+//
+//go:uintptrescapes
 func (s Symbol) CallRaw(args ...uintptr) (r1, r2 uintptr, err syscall.Errno) {
 	return CallRaw(uintptr(s), args...)
 }
