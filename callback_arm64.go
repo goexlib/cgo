@@ -27,8 +27,8 @@ func cbNewDispatchTrampoline() uintptr {
 
 // buildCbArgPlan assigns the arguments following the AAPCS64 calling
 // convention: integer-like arguments take X0-X7, float arguments take
-// D0-D7 and the rest goes onto the stack. Linux uses 8-byte stack slots
-// while Darwin packs stack arguments to their natural alignment. Structs are
+// D0-D7 and the rest goes onto the stack. Stack size and alignment follow
+// standard AAPCS64 or Apple ARM64 rules, as appropriate. Structs are
 // classified per the ABI (see classifyStructArg).
 func buildCbArgPlan(ty reflect.Type, sret bool) []cbArgLoc {
 	ints, floats := 0, 0
@@ -63,17 +63,23 @@ func buildCbArgPlan(ty reflect.Type, sret bool) []cbArgLoc {
 	return locs
 }
 
-// aapcsStackPush reserves a stack slot for a value passed by value and returns
-// its offset. Linux rounds each argument to an 8-byte slot; Darwin packs
-// arguments to their natural alignment.
+// aapcsStackPush reserves a stack slot for a value passed by value. Apple
+// packs scalars and HFAs naturally; ordinary composites retain eight-byte
+// alignment and rounded size. Standard AAPCS64 also rounds scalar slots.
 func aapcsStackPush(t reflect.Type, stackOff *uintptr) uintptr {
-	if runtime.GOOS == "darwin" {
-		off := cbAlignUp(*stackOff, uintptr(t.Align()))
-		*stackOff = off + t.Size()
-		return off
+	size, align := t.Size(), uintptr(t.Align())
+	natural := runtime.GOOS == "darwin" || runtime.GOOS == "ios"
+	if natural && t.Kind() == reflect.Struct {
+		natural, _, _ = cbIsHFA(t)
 	}
-	off := *stackOff
-	*stackOff += cbAlignUp(t.Size(), 8)
+	if !natural {
+		if align < 8 {
+			align = 8
+		}
+		size = cbAlignUp(size, 8)
+	}
+	off := cbAlignUp(*stackOff, align)
+	*stackOff = off + size
 	return off
 }
 
@@ -127,8 +133,8 @@ func classifyStructArg(t reflect.Type, ints, floats *int, stackOff *uintptr) cbA
 		*ints++
 		return loc
 	}
-	loc := cbArgLoc{typ: t, kind: cbArgIndirect, src: cbSrcStack, soff: *stackOff}
-	*stackOff += 8
+	// The lowered argument is a pointer, including its stack alignment.
+	loc := cbArgLoc{typ: t, kind: cbArgIndirect, src: cbSrcStack, soff: aapcsStackPush(reflect.TypeOf(uintptr(0)), stackOff)}
 	return loc
 }
 
