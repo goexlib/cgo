@@ -2,6 +2,21 @@ package cgo
 
 import "testing"
 
+func TestRegisterLibFunc(t *testing.T) {
+	lib, err := LoadLibrary("testdata/test.dll")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lib.Close()
+	var add func(Int, Int) Int
+	if err := RegisterLibFunc(&add, uintptr(lib), "add"); err != nil {
+		t.Fatal(err)
+	}
+	if got := add(8, 13); got != 21 {
+		t.Fatalf("绑定的 add(8,13) = %d，预期 21", got)
+	}
+}
+
 func Test_Call(t *testing.T) {
 	lib, err := LoadLibrary("testdata/test.dll")
 	if err != nil {

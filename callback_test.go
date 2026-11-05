@@ -7,10 +7,9 @@ import (
 	"testing"
 )
 
-// requirePuregoStackLayout skips stack-spill tests on darwin/arm64, where
-// purego's caller uses 8-byte stack slots instead of Apple's packed layout.
-// Those callbacks are covered against a real C compiler in TestCallbackFromC.
-func requirePuregoStackLayout(t *testing.T) {
+// CallRaw 的参数是 uintptr 字槽，不能描述 Apple ABI 中紧凑的 int32 栈参数。
+// 此原生回调另由 TestCallbackFromC 的真实 C 调用方验证。
+func requireWordStackLayout(t *testing.T) {
 	t.Helper()
 	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" {
 		t.Skip("stack-argument callbacks are verified in TestCallbackFromC on darwin/arm64")
@@ -31,7 +30,7 @@ func TestNewCallbackForwarded(t *testing.T) {
 // TestNewCallbackNativeInts forces the native thunk with integer register
 // and stack arguments.
 func TestNewCallbackNativeInts(t *testing.T) {
-	requirePuregoStackLayout(t)
+	requireWordStackLayout(t)
 	cb := newCallbackNative(func(a1, a2, a3, a4, a5, a6, a7, a8, a9, a10, a11, a12 Int) Int {
 		return a1*1 + a2*2 + a3*3 + a4*4 + a5*5 + a6*6 + a7*7 + a8*8 + a9*9 + a10*10 + a11*11 + a12*12
 	})

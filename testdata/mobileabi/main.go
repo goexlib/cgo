@@ -90,15 +90,30 @@ func init() {
 		case 1:
 			v := ffi.CallRet[float64](symbols[0], float64(1.25), float32(2.5), uint64(7))
 			require(v == 10.75, v)
+			var typed func(float64, float32, uint64) float64
+			require(ffi.RegisterFunc(&typed, symbols[0]) == nil, "typed float registration")
+			require(typed(1.25, 2.5, 7) == 10.75, "typed native float call")
+			var expanded func(...any) float64
+			require(ffi.RegisterFunc(&expanded, symbols[0]) == nil, "expanded registration")
+			require(expanded(float64(1.25), float32(2.5), uint64(7)) == 10.75, "expanded native call")
 		case 2:
 			v := ffi.CallRet[Point](symbols[1], Point{1.5, 2.25}, float64(2))
 			require(v == (Point{3, 4.5}), v)
+			var typed func(Point, float64) Point
+			require(ffi.RegisterFunc(&typed, symbols[1]) == nil, "HFA registration")
+			require(typed(Point{1.5, 2.25}, 2) == (Point{3, 4.5}), "typed native HFA call")
 		case 3:
 			v := ffi.CallRet[Mixed](symbols[2], Mixed{7, 1.25}, uint64(10), float64(.5))
 			require(v == (Mixed{17, 1.75}), v)
+			var typed func(Mixed, uint64, float64) Mixed
+			require(ffi.RegisterFunc(&typed, symbols[2]) == nil, "mixed registration")
+			require(typed(Mixed{7, 1.25}, 10, .5) == (Mixed{17, 1.75}), "typed native mixed call")
 		case 4:
 			v := ffi.CallRet[Big](symbols[3], Big{1, 2, 3, 4.5}, uint64(10))
 			require(v == (Big{11, 22, 33, 5}), v)
+			var typed func(Big, uint64) Big
+			require(ffi.RegisterFunc(&typed, symbols[3]) == nil, "indirect registration")
+			require(typed(Big{1, 2, 3, 4.5}, 10) == (Big{11, 22, 33, 5}), "typed native indirect call")
 		case 5:
 			v := ffi.CallRet[float64](symbols[4], cbFloat)
 			require(v == 10.75, v)
