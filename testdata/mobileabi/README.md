@@ -10,21 +10,21 @@ C 函数的实参和期望值直接写在 C/Go 测试中，不使用同一份 Go
 
 ## 依赖与本地开发
 
-当前基座工具固定 Go 1.25.8。调用方向需要 `purego` 的移动 ABI 修复分支
-（本地 `feature/mobile-base`，基于上游 v0.10.2）；根模块仍保持已发布的依赖，
-不提交本机绝对路径 `replace`。验证时在仓库外建立显式工作区：
+当前基座工具固定 Go 1.25.8。调用和回调的 ARM64 编排由 goexlib/cgo 实现，
+依赖未修改的官方 purego v0.10.2。验证时在仓库外建立显式工作区：
 
 ```text
 go 1.25.8
 use (
  /path/to/cgo
- /path/to/purego
  /path/to/cgo/testdata/mobileabi
 )
 ```
 
-给以下命令设置 `GOWORK=/absolute/path/to/go.work`。未经修复的 upstream purego
-不能作为本例程的通过基线；其问题会被测试明确报告。
+给以下命令设置 `GOWORK=/absolute/path/to/go.work`。工作区不包含 purego 源码
+替换；以模块下载的官方版本验证，不允许借用此前私有分支掩盖调用问题。
+用例 1–4 同时验证类型化 RegisterFunc；用例 1 另验证展开的 ...any 注册路径，
+结果仍直接与独立 C 实现的固定预期比较，不只作 Go 调用与回调自洽比较。
 
 ## Linux ARM64 对照组
 
